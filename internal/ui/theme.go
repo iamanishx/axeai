@@ -11,6 +11,11 @@ type VercelTheme struct {
 	defaultTheme fyne.Theme
 }
 
+const (
+	ChatTextSizeName fyne.ThemeSizeName = "chatText"
+	ChatMetaSizeName fyne.ThemeSizeName = "chatMeta"
+)
+
 func NewVercelTheme() fyne.Theme {
 	return &VercelTheme{
 		defaultTheme: theme.DarkTheme(),
@@ -65,6 +70,10 @@ func (v *VercelTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 
 func (v *VercelTheme) Size(name fyne.ThemeSizeName) float32 {
 	switch name {
+	case ChatTextSizeName:
+		return v.defaultTheme.Size(theme.SizeNameText) * 1.15
+	case ChatMetaSizeName:
+		return v.defaultTheme.Size(theme.SizeNameText) * 1.0
 	case theme.SizeNameText:
 		return 14
 	case theme.SizeNameHeadingText:

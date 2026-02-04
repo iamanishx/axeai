@@ -21,28 +21,40 @@ func NewComposer(onSubmit func(string)) *Composer {
 	c.entry = widget.NewMultiLineEntry()
 	c.entry.SetPlaceHolder("Message...")
 	c.entry.Wrapping = fyne.TextWrapWord
+	c.entry.SetMinRowsVisible(2)
+	c.entry.OnSubmitted = func(_ string) {
+		c.send()
+	}
 
 	c.sendBtn = widget.NewButtonWithIcon("", theme.MailSendIcon(), func() {
-		content := c.entry.Text
-		if content != "" {
-			c.onSubmit(content)
-			c.entry.SetText("")
-		}
+		c.send()
 	})
 	c.sendBtn.Importance = widget.HighImportance
+	c.sendBtn.Disable()
+
+	c.entry.OnChanged = func(content string) {
+		if content == "" {
+			c.sendBtn.Disable()
+			return
+		}
+		c.sendBtn.Enable()
+	}
 
 	return c
 }
 
 func (c *Composer) Container() fyne.CanvasObject {
 	bg := canvas.NewRectangle(VercelDarkGray)
-	bg.CornerRadius = 8
-	bg.SetMinSize(fyne.NewSize(760, 60))
+	bg.CornerRadius = 10
+	bg.StrokeColor = VercelGray
+	bg.StrokeWidth = 1
+	bg.SetMinSize(fyne.NewSize(860, 64))
 
-	inputSurface := container.NewBorder(nil, nil, nil, c.sendBtn, c.entry)
+	buttonWrap := container.NewGridWrap(fyne.NewSize(48, 48), c.sendBtn)
+	inputSurface := container.NewBorder(nil, nil, nil, buttonWrap, c.entry)
 
 	bar := container.NewStack(bg, container.NewPadded(inputSurface))
-	maxWidth := container.New(&MaxWidthLayout{MaxWidth: 760, MinWidth: 760}, bar)
+	maxWidth := container.New(&MaxWidthLayout{MaxWidth: 860, MinWidth: 860}, bar)
 
 	return container.NewHBox(layout.NewSpacer(), maxWidth, layout.NewSpacer())
 }
@@ -50,9 +62,20 @@ func (c *Composer) Container() fyne.CanvasObject {
 func (c *Composer) SetEnabled(enabled bool) {
 	if enabled {
 		c.entry.Enable()
-		c.sendBtn.Enable()
+		if c.entry.Text != "" {
+			c.sendBtn.Enable()
+		}
 	} else {
 		c.entry.Disable()
 		c.sendBtn.Disable()
 	}
+}
+
+func (c *Composer) send() {
+	content := c.entry.Text
+	if content == "" {
+		return
+	}
+	c.onSubmit(content)
+	c.entry.SetText("")
 }

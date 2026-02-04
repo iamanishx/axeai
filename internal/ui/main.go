@@ -21,10 +21,9 @@ type MainUI struct {
 	config       *config.Config
 	agentService *agent.Service
 
-	sidebar   *Sidebar
-	chatView  *ChatView
-	composer  *Composer
-	toolPanel *ToolPanel
+	sidebar  *Sidebar
+	chatView *ChatView
+	composer *Composer
 
 	currentSessionID string
 }
@@ -39,12 +38,9 @@ func New(window fyne.Window, store *storage.Storage, cfg *config.Config, agentSv
 }
 
 func (ui *MainUI) Initialize() {
-	ui.sidebar = NewSidebar(ui.storage, ui.onSessionSelected, ui.onNewSession)
+	ui.sidebar = NewSidebar(ui.storage, ui.onSessionSelected, ui.onNewSession, ui.onDeleteSession)
 	ui.chatView = NewChatView()
 	ui.composer = NewComposer(ui.onSendMessage)
-	ui.toolPanel = NewToolPanel()
-
-	rightPanel := container.NewPadded(ui.toolPanel.Container())
 
 	centralColumn := container.NewBorder(
 		nil,
@@ -53,9 +49,7 @@ func (ui *MainUI) Initialize() {
 		ui.chatView.Container(),
 	)
 
-	mainContent := container.NewBorder(nil, nil, nil, rightPanel, centralColumn)
-
-	content := container.NewHSplit(ui.sidebar.Container(), mainContent)
+	content := container.NewHSplit(ui.sidebar.Container(), centralColumn)
 	content.SetOffset(0.15)
 
 	ui.window.SetContent(content)
@@ -72,9 +66,6 @@ func (ui *MainUI) createMenu() *fyne.MainMenu {
 			fyne.NewMenuItem("Quit", func() {
 				ui.window.Close()
 			}),
-		),
-		fyne.NewMenu("View",
-			fyne.NewMenuItem("Toggle Tool Panel", func() {}),
 		),
 		fyne.NewMenu("Settings",
 			fyne.NewMenuItem("Providers & MCP", ui.showSettingsDialog),
@@ -96,8 +87,7 @@ func (ui *MainUI) onSessionSelected(sessionID string) {
 		ui.chatView.AddMessage(string(msg.Role), msg.Content)
 	}
 
-	toolCalls, _ := ui.storage.ListToolCalls(sessionID)
-	ui.toolPanel.UpdateToolCalls(toolCalls)
+	ui.chatView.ClearStatus()
 }
 
 func (ui *MainUI) onNewSession() {
@@ -148,6 +138,34 @@ func (ui *MainUI) onNewSession() {
 	}
 
 	d.Show()
+}
+
+func (ui *MainUI) onDeleteSession(sessionID string) {
+	if sessionID == "" {
+		return
+	}
+
+	confirm := dialog.NewConfirm(
+		"Delete Session",
+		"Delete this session and all its messages?",
+		func(ok bool) {
+			if !ok {
+				return
+			}
+			if err := ui.storage.DeleteSession(sessionID); err != nil {
+				dialog.ShowError(err, ui.window)
+				return
+			}
+			if ui.currentSessionID == sessionID {
+				ui.currentSessionID = ""
+				ui.chatView.Clear()
+				ui.agentService.RemoveRunner(sessionID)
+			}
+			ui.sidebar.LoadSessions("default")
+		},
+		ui.window,
+	)
+	confirm.Show()
 }
 
 func (ui *MainUI) showSettingsDialog() {
@@ -219,6 +237,8 @@ func (ui *MainUI) onSendMessage(content string) {
 	}
 
 	ui.chatView.AddMessage("user", content)
+	ui.chatView.AddMessage("assistant", "")
+	ui.chatView.SetStatus("Thinking...")
 	ui.composer.SetEnabled(false)
 
 	ctx := context.Background()
@@ -226,18 +246,33 @@ func (ui *MainUI) onSendMessage(content string) {
 		func(role, content string) {
 			if role == "assistant" {
 				fyne.Do(func() {
+					if content != "" {
+						ui.chatView.ClearStatus()
+					}
 					ui.chatView.UpdateLastMessage(content)
+				})
+				return
+			}
+			if role == "system" {
+				fyne.Do(func() {
+					ui.chatView.ClearStatus()
+					ui.chatView.RemoveLastAssistantIfEmpty()
+					ui.chatView.AddMessage("system", content)
 				})
 			}
 		},
 		func(toolName string, args, result map[string]any, err error) {
-			if toolName != "" {
-				fmt.Printf("Tool call: %s\n", toolName)
-			}
+			fyne.Do(func() {
+				if toolName != "" {
+					if result != nil {
+						ui.chatView.AddNote("Tool done: " + toolName)
+						return
+					}
+					ui.chatView.AddNote("Tool: " + toolName)
+				}
+			})
 		},
-		func(line string) {
-			ui.toolPanel.AppendDebug(line)
-		},
+		nil,
 	)
 
 	if err != nil {

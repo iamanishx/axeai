@@ -18,14 +18,17 @@ type Sidebar struct {
 	sessions     []models.Session
 	onSelect     func(sessionID string)
 	onNewSession func()
+	onDelete     func(sessionID string)
 	container    *fyne.Container
+	selectedID   string
 }
 
-func NewSidebar(store *storage.Storage, onSelect func(sessionID string), onNew func()) *Sidebar {
+func NewSidebar(store *storage.Storage, onSelect func(sessionID string), onNew func(), onDelete func(sessionID string)) *Sidebar {
 	s := &Sidebar{
 		storage:      store,
 		onSelect:     onSelect,
 		onNewSession: onNew,
+		onDelete:     onDelete,
 	}
 	s.build()
 	return s
@@ -40,7 +43,17 @@ func (s *Sidebar) build() {
 	})
 	newBtn.Importance = widget.MediumImportance
 
-	header := container.NewBorder(nil, nil, nil, newBtn, title)
+	deleteBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+		if s.selectedID == "" {
+			return
+		}
+		s.onDelete(s.selectedID)
+	})
+	deleteBtn.Importance = widget.LowImportance
+	deleteBtn.Disable()
+
+	headerActions := container.NewHBox(deleteBtn, newBtn)
+	header := container.NewBorder(nil, nil, nil, headerActions, title)
 
 	separator := canvas.NewRectangle(VercelGray)
 	separator.SetMinSize(fyne.NewSize(0, 1))
@@ -67,6 +80,8 @@ func (s *Sidebar) build() {
 	s.sessionList.OnSelected = func(id widget.ListItemID) {
 		if id < len(s.sessions) {
 			s.onSelect(s.sessions[id].ID)
+			s.selectedID = s.sessions[id].ID
+			deleteBtn.Enable()
 		}
 	}
 

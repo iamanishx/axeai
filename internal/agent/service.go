@@ -275,7 +275,7 @@ func (s *Service) handleStreaming(ctx context.Context, r *runner.Runner, session
 						}
 
 						if part.FunctionResponse != nil {
-							onToolCall("", nil, part.FunctionResponse.Response, nil)
+							onToolCall(part.FunctionResponse.Name, nil, part.FunctionResponse.Response, nil)
 							if onDebug != nil {
 								onDebug(fmt.Sprintf("tool_response=%s", part.FunctionResponse.Name))
 							}
